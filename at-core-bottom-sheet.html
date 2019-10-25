@@ -1,0 +1,307 @@
+<link rel="import" href="../tangere/tangere.html">
+<link rel="import" href="../paper-dialog/paper-dialog.html">
+<link rel="import" href="../iron-icons/iron-icons.html">
+<link rel="import" href="../neon-animation/animations/slide-from-bottom-animation.html">
+<link rel="import" href="../neon-animation/animations/slide-down-animation.html">
+<link rel="import" href="../neon-animation/web-animations.html">
+
+<dom-module id="at-core-bottom-sheet">
+  <template>
+    <style>
+      .dialog {
+        background-color: rgba(0, 0, 0, 0.6) !important;
+        margin: 0 !important;
+        @apply --layout-fixed-bottom;
+      }
+
+      .content {
+        width: 100%;
+        background-color: white;
+        bottom: 0;
+        margin: 0 !important;
+        padding: 0 !important;
+        padding-bottom: constant(safe-area-inset-bottom) !important;
+        /* iOS 11.0 */
+        padding-bottom: env(safe-area-inset-bottom) !important;
+        /* iOS 11.2 */
+      }
+
+      [hidden] {
+        display: none;
+      }
+
+      :host {
+        @apply --layout-vertical;
+      }
+
+      :host([hidden]) {
+        display: none !important;
+      }
+
+      .bottom-sheet-item {
+        @apply (--paper-font-body1);
+        box-sizing: border-box;
+        display: block;
+        padding: 6px 12px;
+        cursor: pointer;
+      }
+
+      .bottom-sheet-item[disabled] {
+        @apply(--at-form-disabled);
+        pointer-events: none;
+      }
+
+      .bottom-sheet-item.highlighted {
+        @apply(--at-text-selected);
+      }
+
+      .bottom-sheet-item.selected,
+      .bottom-sheet-item.selected.highlighted {
+        @apply(--at-text-primary-selected);
+      }
+
+      .item-container {
+        white-space: nowrap;
+      }
+
+      .icon-class {
+        padding: 0 12px 0 0;
+      }
+
+      .title-class {
+        vertical-align: middle;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+    </style>
+
+    <paper-dialog id="dialog" class="dialog"  on-iron-overlay-opened="_handleIronOverlayOpened" on-iron-overlay-closed="_handleIronOverlayClosed" with-backdrop auto-fit-on-attach>
+      <div class="content">
+          <template is="dom-repeat" items="[[_items]]">
+              <at-core-view id="bottomSheetItem[[index]]" view="[[itemView]]" value="[[item]]" class$="[[_computeMenuItemClassList(item)]]" on-tap="_handleItemOnTap" on-mouseenter="_handleItemOnMouseEnter" on-mouseleave="_handleItemOnMouseLeave" disabled$="[[item.disabled]]"></at-core-view>
+          </template>
+      </div>
+    </paper-dialog>
+  </template>
+
+  <script>
+    'use strict';
+    Polymer({
+      is: 'at-core-bottom-sheet',
+
+      properties: {
+        
+        slide: {
+          type: Boolean,
+          value: false,
+          observer: '_slideChanged'
+        },
+
+        open: {
+          type: Boolean,
+          value: false,
+          observer: '_openChanged',
+          notify: true
+        },
+
+        items: {
+          type: Array,
+          value: function () {
+            return [];
+          },
+          schema: {
+            items: {
+              properties: {
+                value: {
+                  type: String,
+                  title: "Value",
+                  "default": ""
+                },
+                title: {
+                  type: String,
+                  title: "Title",
+                  "default": ""
+                },
+                icon: {
+                  type: String,
+                  title: "Icon",
+                  "default": ""
+                },
+                disabled: {
+                  type: Boolean,
+                  title: "Disabled",
+                  "default": false
+                },
+                class: {
+                  type: String,
+                  title: 'CSS Class',
+                  "default": ''
+                }
+              }
+            }
+          },
+          xgridcols: "12"
+        },
+
+        _items: {
+          type: Array,
+          value: function () {
+            return [];
+          },
+        },
+
+        itemView: {
+          type: String,
+          xtype: 'code',
+          mode: 'liquidmixed',
+          value: '<div class="item-container at-carbon-menu-button"><at-carbon-icon icon="{{icon}}" class="icon-class at-carbon-menu-button"></at-carbon-icon><span class="title-class at-carbon-menu-button">{{title}}</span></div>'
+        },
+
+        value: {
+          type: String,
+          value: "",
+          observer: '_valueChanged'
+        },
+      },
+
+      observers: [
+        '_itemsChanged(items.*)'
+      ],
+
+      openSheet: function () {
+        Polymer.dom(document.body).appendChild(this);
+        // Wait until dialog is added to the DOM (required for Safari)
+        setTimeout(function () {
+          this.$.dialog.open();
+        }.bind(this), 1);
+      },
+
+      closeSheet: function () {
+        this.$.dialog.close();
+      },
+
+      _openChanged: function (newValue, oldValue) {
+        if (oldValue != undefined) {
+          if (newValue == true) {
+            this.openSheet();
+            this.$.dialog.style.zIndex = Tangere.layerZIndex();
+          } else {
+            this.closeSheet();
+          }
+        }
+      },
+
+      _slideChanged: function(newValue, oldValue) {
+        var dialog = this.$.dialog;
+
+        if(newValue == true) {
+          dialog.setAttribute('entry-animation', 'slide-from-bottom-animation');
+          dialog.setAttribute('exit-animation', 'slide-down-animation');
+        } else {
+          dialog.removeAttribute('entry-animation');
+          dialog.removeAttribute('exit-animation');
+        }
+      },
+
+      _handleIronOverlayOpened: function(event) {
+        if(this.open != true) this.open = true;
+      },
+
+      _handleIronOverlayClosed: function(event) {
+        if(this.open != false) this.open = false;
+      },
+
+      _valueChanged: function(newValue, oldValue) {
+        if (!this._isString(newValue)) { return; }
+
+        // clear currently selected
+        var selected = Polymer.dom(this.root).querySelector('.selected');
+        if (selected) {
+          Polymer.dom(selected).classList.remove('selected');
+        }
+
+        if (newValue === "") return;
+        
+        var selectedIndex = -1;
+        for (var i = 0; i < this.items.length; i++) {
+          var item = this.items[i];
+          if (item.value === newValue) {
+            selectedIndex = i;
+            break;
+          }
+        }
+
+        if (selectedIndex > -1) {
+          var newSelected = Polymer.dom(this.root).querySelector('[id="bottomSheetItem' + selectedIndex + '"]');
+          if (newSelected) {
+            // clear previosly selected 
+            var selected = this.querySelector('.selected');
+            if (selected) {
+              Polymer.dom(selected).classList.remove('selected');
+            }
+            newSelected.classList.add('selected');
+          }
+        }
+      },
+
+      _itemsChanged: function(itemsSplices) {
+        this._items = [];
+        if (!this._isArray(itemsSplices.base)) return;
+        this._items = itemsSplices.base;
+      },
+
+      _computeMenuItemClassList: function (item) {
+        var classList = ['bottom-sheet-item'];
+        
+        if (item.value === this.value) {
+          classList.push('selected');
+        }
+        
+        if (item.class) {
+          classList.push(item.class);
+        }
+        
+        return classList.join(" ");
+      },
+
+      _handleItemOnMouseEnter: function (event) {
+        var previous = this.querySelector('.highlighted');
+        if (previous) {
+          previous.classList.remove('highlighted');
+        }
+
+        var current = event.currentTarget;
+        current.classList.add('highlighted');
+      },
+
+      _handleItemOnMouseLeave: function (event) {
+        var current = event.currentTarget;
+        current.classList.remove('highlighted');
+      },
+
+      _handleItemOnTap: function (event) {
+        var previouslySelected = Polymer.dom(this.root).querySelector('.selected');
+        // var previouslySelected = this.querySelector('.selected');
+        if (previouslySelected) {
+          previouslySelected.classList.remove('selected');
+        }
+
+        var tapped = event.currentTarget;
+        tapped.classList.add('selected');
+
+        // this is used to parse the number from an id (example: bottomSheetItem12 -> id = 12) and use it to retrieve an item with it's value
+        var tappedId = tapped.getAttribute('id');
+        var indexInValue = tappedId.replace('bottomSheetItem','');
+
+        var item = this.items[indexInValue];
+
+        this.value = item.value;
+        this.fire('value-changed', { value: this.value }, { bubbles: false });
+      },
+
+      _isString: function(obj) { return Object.prototype.toString.call(obj) === "[object String]"; },
+
+      _isArray: function(obj) { return Object.prototype.toString.call(obj) === "[object Array]"; },
+    });
+  </script>
+</dom-module>
