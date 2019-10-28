@@ -1,13 +1,10 @@
 <link rel="import" href="../tangere/tangere.html">
-<link rel="import" href="../paper-dialog/paper-dialog.html">
 <link rel="import" href="../iron-icons/iron-icons.html">
-<link rel="import" href="../neon-animation/animations/slide-from-bottom-animation.html">
-<link rel="import" href="../neon-animation/animations/slide-down-animation.html">
-<link rel="import" href="../neon-animation/web-animations.html">
+<link rel="import" href="../at-core-style-classes/at-core-style-classes.html" />
 
 <dom-module id="at-core-bottom-sheet">
   <template>
-    <style>
+    <style include="at-core-style-classes">
       .dialog {
         background-color: rgba(0, 0, 0, 0.6) !important;
         margin: 0 !important;
@@ -73,15 +70,54 @@
         overflow: hidden;
         white-space: nowrap;
       }
+
+      .contentWrapperVisible {
+        visibility: visible;
+        opacity: 1;
+        transition: opacity 0.3s linear;
+      }
+
+      .contentWrapperHidden {
+        visibility: hidden;
+        opacity: 0;
+        transition: visibility 0s 0.15s, opacity 0.15s linear;
+      }
+
+      .contentWrapperSlideVisible {
+        transform: translateY(0);
+        transition: transform 0.2s linear;
+      }
+
+      .contentWrapperSlideHidden {
+        transform: translateY(100%);
+        transition: transform 0.2s linear;
+      }
+
+      .backdropVisible {
+        position:fixed;
+        top:0;
+        left:0;
+        width:100%;
+        height:100%;
+        opacity:0.6;
+        visibility: visible;
+        transition: opacity 0.2s linear;
+      }
+
+      .backdropHidden {
+        opacity:0;
+        visibility: hidden;
+        transition: visibility 0s 0.2s, opacity 0.2s linear;
+      }
+
     </style>
 
-    <paper-dialog id="dialog" class="dialog"  on-iron-overlay-opened="_handleIronOverlayOpened" on-iron-overlay-closed="_handleIronOverlayClosed" with-backdrop auto-fit-on-attach>
-      <div class="content">
-          <template is="dom-repeat" items="[[_items]]">
-              <at-core-view id="bottomSheetItem[[index]]" view="[[itemView]]" value="[[item]]" class$="[[_computeMenuItemClassList(item)]]" on-tap="_handleItemOnTap" on-mouseenter="_handleItemOnMouseEnter" on-mouseleave="_handleItemOnMouseLeave" disabled$="[[item.disabled]]"></at-core-view>
-          </template>
+      <div id="contentWrapper" class="content layout-fixed-bottom">
+        <template is="dom-repeat" items="[[_items]]">
+            <at-core-view id="bottomSheetItem[[index]]" view="[[itemView]]" value="[[item]]" class$="[[_computeMenuItemClassList(item)]]" on-tap="_handleItemOnTap" on-mouseenter="_handleItemOnMouseEnter" on-mouseleave="_handleItemOnMouseLeave" disabled$="[[item.disabled]]"></at-core-view>
+        </template>
       </div>
-    </paper-dialog>
+      <div id="backdrop" class$="[[_computeBackdropHidden(open)]] background-black" on-click="_handleBackdropClick"></div>
   </template>
 
   <script>
@@ -168,47 +204,50 @@
         '_itemsChanged(items.*)'
       ],
 
-      openSheet: function () {
-        Polymer.dom(document.body).appendChild(this);
-        // Wait until dialog is added to the DOM (required for Safari)
-        setTimeout(function () {
-          this.$.dialog.open();
-        }.bind(this), 1);
+      _computeBackdropHidden: function(open) {
+        if(open == true) {
+          this.$.backdrop.style.zIndex = Tangere.layerZIndex();
+          this.$.contentWrapper.style.zIndex = Tangere.layerZIndex() + 1;
+          return 'backdropVisible';
+        } else {
+          return 'backdropHidden';
+          this.$.contentWrapper.style.zIndex = "";
+        }
       },
 
-      closeSheet: function () {
-        this.$.dialog.close();
+      _handleBackdropClick: function(event) {
+        this.open = false;
       },
 
       _openChanged: function (newValue, oldValue) {
-        if (oldValue != undefined) {
-          if (newValue == true) {
-            this.openSheet();
-            this.$.dialog.style.zIndex = Tangere.layerZIndex();
-          } else {
-            this.closeSheet();
-          }
+        if (oldValue == undefined) return;
+
+        var contentWrapper = this.$.contentWrapper;
+
+        if (newValue == true) {
+          contentWrapper.classList.remove('contentWrapperHidden');
+          contentWrapper.classList.remove('contentWrapperSlideHidden');
+
+          if(this.slide == true) contentWrapper.classList.add('contentWrapperSlideVisible');
+          if(this.slide == false) contentWrapper.classList.add('contentWrapperVisible');
+
+        } else {
+          contentWrapper.classList.remove('contentWrapperVisible');
+          contentWrapper.classList.remove('contentWrapperSlideVisible');
+          
+          if(this.slide == true) contentWrapper.classList.add('contentWrapperSlideHidden');
+          if(this.slide == false) contentWrapper.classList.add('contentWrapperHidden');
         }
       },
 
       _slideChanged: function(newValue, oldValue) {
-        var dialog = this.$.dialog;
+        this.open = false;
+        var contentWrapper = this.$.contentWrapper;
+        contentWrapper.classList.remove('contentWrapperVisible');
+        contentWrapper.classList.remove('contentWrapperSlideVisible');
 
-        if(newValue == true) {
-          dialog.setAttribute('entry-animation', 'slide-from-bottom-animation');
-          dialog.setAttribute('exit-animation', 'slide-down-animation');
-        } else {
-          dialog.removeAttribute('entry-animation');
-          dialog.removeAttribute('exit-animation');
-        }
-      },
-
-      _handleIronOverlayOpened: function(event) {
-        if(this.open != true) this.open = true;
-      },
-
-      _handleIronOverlayClosed: function(event) {
-        if(this.open != false) this.open = false;
+        if(newValue == true) contentWrapper.classList.add('contentWrapperSlideHidden');
+        if(newValue == false) contentWrapper.classList.add('contentWrapperHidden');
       },
 
       _valueChanged: function(newValue, oldValue) {
@@ -281,7 +320,6 @@
 
       _handleItemOnTap: function (event) {
         var previouslySelected = Polymer.dom(this.root).querySelector('.selected');
-        // var previouslySelected = this.querySelector('.selected');
         if (previouslySelected) {
           previouslySelected.classList.remove('selected');
         }
