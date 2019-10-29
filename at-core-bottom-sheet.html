@@ -73,13 +73,13 @@
       .contentWrapperVisible {
         visibility: visible;
         opacity: 1;
-        transition: opacity 0.3s linear;
+        transition: visibility 0.2s linear, opacity 0.2s linear;
       }
 
       .contentWrapperHidden {
         visibility: hidden;
         opacity: 0;
-        transition: visibility 0s 0.15s, opacity 0.15s linear;
+        transition: visibility 0.2s linear, opacity 0.2s linear;
       }
 
       .contentWrapperSlideVisible {
@@ -203,10 +203,6 @@
         '_itemsChanged(items.*)'
       ],
 
-      ready: function () {
-        Polymer.dom(document.body).appendChild(this);
-      },
-
       _computeBackdropHidden: function(open) {
         if(open == true) {
           this.$.backdrop.style.zIndex = Tangere.layerZIndex();
@@ -224,23 +220,61 @@
 
       _openChanged: function (newValue, oldValue) {
         if (oldValue == undefined) return;
-
+        
         var contentWrapper = this.$.contentWrapper;
 
         if (newValue == true) {
-          contentWrapper.classList.remove('contentWrapperHidden');
-          contentWrapper.classList.remove('contentWrapperSlideHidden');
+          Polymer.dom(document.body).appendChild(this);
+          Polymer.dom.flush();
 
-          if(this.slide == true) contentWrapper.classList.add('contentWrapperSlideVisible');
-          if(this.slide == false) contentWrapper.classList.add('contentWrapperVisible');
+          // slideUp doesn't animate properly when it's opened for the first time if there is no timeout
+          setTimeout(function () {
+            requestAnimationFrame(function () {
+              contentWrapper.classList.remove('contentWrapperHidden');
+              contentWrapper.classList.remove('contentWrapperSlideHidden');
+              if (this.slide == true) contentWrapper.classList.add('contentWrapperSlideVisible');
+              if (this.slide == false) contentWrapper.classList.add('contentWrapperVisible');
+            }.bind(this));
+          }.bind(this), 10);
+          
 
         } else {
           contentWrapper.classList.remove('contentWrapperVisible');
           contentWrapper.classList.remove('contentWrapperSlideVisible');
-          
-          if(this.slide == true) contentWrapper.classList.add('contentWrapperSlideHidden');
-          if(this.slide == false) contentWrapper.classList.add('contentWrapperHidden');
+
+          // mark the beginning of animation - this is used because we don't want to remove the element before the animation is finished
+          this._requestAnimationFrameEnded = false;
+
+          requestAnimationFrame(function() {
+            if (this.slide == true) contentWrapper.classList.add('contentWrapperSlideHidden');
+            if (this.slide == false) contentWrapper.classList.add('contentWrapperHidden');
+
+            this._requestAnimationFrameEnded = true;
+          }.bind(this));
+
+          // clean up after the animation is complete:
+          // we need to listen for the transition end and then remove the element from the DOM along with it's listeners
+          this._addAnimationFinishedListener();
         }
+      },
+
+      _removeAnimationFinishedListener: function (evt) {
+        var contentWrapper = this.$.contentWrapper;
+        contentWrapper.removeEventListener('transitionend', this._boundRemoveAnimationEndListener);
+        contentWrapper.removeEventListener('webkitTransitionEnd', this._boundRemoveAnimationEndListener);
+
+        if (this.open == false) Polymer.dom(this.parentNode).removeChild(this);
+      },
+
+      _addAnimationFinishedListener: function () {
+        var contentWrapper = this.$.contentWrapper;
+
+        if (!this._boundRemoveAnimationEndListener) {
+          this._boundRemoveAnimationEndListener = this._removeAnimationFinishedListener.bind(this);
+        }
+
+        contentWrapper.addEventListener('transitionend', this._boundRemoveAnimationEndListener);
+        contentWrapper.addEventListener('webkitTransitionEnd', this._boundRemoveAnimationEndListener);
       },
 
       _slideChanged: function(newValue, oldValue) {
